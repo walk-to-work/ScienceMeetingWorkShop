@@ -6,7 +6,10 @@
 ## CubeMXでの設定
 
 CubeMXを起動し，Nucleo32f303k8を選択後，次の操作でピンの割り当てを行う．
-PB3で左クリックで[GPIO_Output]を選択，右クリックで[Enter User Label]を選択し，任意の名前を入力する（今回はLD3とした）．
+
+1. PB3で左クリックで[GPIO_Output]を選択
+2. 右クリックで[Enter User Label]を選択し，任意の名前を入力する（今回はLD3とした）
+   
 
 ![ピン割り当て](./pin_assign.png)
 
@@ -135,7 +138,7 @@ YabaiFunction(); ←消える
 ```
 
 
-今回のLチカであるが，GPIO_Outputに割り当てたピンに3.3V又は0Vを出力する関数である，```HAL_GPIO_WritePin```と```HAL_Delay```で実装することができる．
+今回のLチカであるが，GPIO_Outputに割り当てたピンに3.3V又は0Vを出力する関数である```HAL_GPIO_WritePin```と，任意のミリ秒処理を遅らせる```HAL_Delay```で実装することができる．
 
 
 ```HAL_GPIO_WritePin```は次のように定義されている．
@@ -181,7 +184,7 @@ __weak void HAL_Delay(uint32_t Delay)
 HAL_Delay(1000);
 ```
 
-で，1秒間処理を待機できる．尚，装飾子```__weak```についてはのちほど解説する(noteに書いてあるが)．
+で，1秒間処理を待機できる．尚，装飾子```__weak```についてはのちほど解説する(@noteに書いてあるが)．
 
 コーディングを終えた際は左上の金槌？のマークでビルドし，エラーがなければPCとボード上のNucleo32をUSBケーブルで繋ぎ，[プロジェクト名を右クリック]→[Run As]→[AC6 STM32 C/C++ Application]でマイコンに書き込みを行える．
 
