@@ -15,7 +15,7 @@
 ![exti_on](./img/EXTI_ON.png)
 1. [System Core] > [GPIO]で[PA12]を選択し，[GPIO Mode]を[External Interrupt Mode with Rising/Falling edge trigger detection]を選択
    
-   これは立ち上がり，立下りの両方を検知するという意味です．
+   これは立ち上がり，立下りの両方を検知するという意味である．
 
 最終的なピン配置は次の通りである．
 
@@ -103,11 +103,11 @@ __weak void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 ```c
 __weak void hoge(){
-  printf("fuga!")
+    printf("fuga!")
 }
 
 void hoge(){
-  printf("piyo!")
+    printf("piyo!")
 }
 ```
 
@@ -117,6 +117,15 @@ void hoge(){
 
 演習4の解説は以上です．
 
-GPIO割り込みを用いて演習2同様にSW1押しているとき間LD3が点灯し，離すと消灯するプログラムを書いてください．
+GPIO割り込みを用いて演習2同様にSW1押しているとき間LD3が点灯し，離すと消灯するプログラムを作成してください．
+
+また，PA8も同様に[GPIO_EXTI]を有効化し，SW2とし，
+SW1とSW2ともに[External Interrupt Mode with Falling edge trigger detection]（立下り検知）とし，
+
+- SW1が押されたとき+1
+- SW2が押されたとき-1
+- どちらが押されてもカウンターの値をターミナル表示
+
+というプログラムを作成してください．
 
 [実装例はこちら](./main.c)
