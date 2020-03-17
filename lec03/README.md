@@ -110,4 +110,4 @@ HAL_UART_Transmit( &huart2 , buf , sizeof(buf) , 0xFFFF );
 
 PCのターミナルから入力を受け取り，そのまま返すプログラムを実装してください．
 
-[実装例はこちら](./main.c)]
+[実装例はこちら](./main.c)

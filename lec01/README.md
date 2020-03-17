@@ -186,14 +186,36 @@ HAL_Delay(1000);
 
 で，1秒間処理を待機できる．尚，装飾子```__weak```についてはのちほど解説する(@noteに書いてあるが)．
 
-コーディングを終えた際は左上の金槌？のマークでビルドし，エラーがなければPCとボード上のNucleo32をUSBケーブルで繋ぎ，
+初めの第一歩としてLチカを実装してみる．Lチカのコードを次に示す．
+```c
+	while (1)
+	{
+		HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+		HAL_Delay(1000);
+		HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+		HAL_Delay(1000);
+		/* USER CODE END WHILE */
+
+		/* USER CODE BEGIN 3 */
+	}
+	/* USER CODE END 3 */
+```
+```HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);```で点灯，		
+```HAL_Delay(1000);```で点灯したまま1秒待機，
+```HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);```で消灯，
+再び```HAL_Delay(1000);```で消灯したまま1秒待機，という実装である．
+
+おそらくエラーは出ないので，ビルドをし，書き込みを行う．
+
+左上の金槌？のマークでビルドし，エラーがなければPCとボード上のNucleo32をUSBケーブルで繋ぎ，
 
 [プロジェクト名を右クリック]>[Run As]>[AC6 STM32 C/C++ Application]でマイコンに書き込みを行える．
 
+光りましたか？
+
 演習1での解説は以上である．
 
-GPIO_Write_Pinを用いてLチカの処理を実装してください．
-
-[実装例はこちら](./main.c)
+# 課題1
 
 余裕のある人は，GPIO_Outputへの出力を反転させる関数```HAL_GPIO_Toggle_Pin(GPIO_Port , GPIO_Pin)```を用いたLチカも実装してみてください．
+[実装例はこちら](./main.c)
