@@ -58,15 +58,50 @@ static void MX_USART2_UART_Init(void)
 
 Baud Rate等が設定されていることが分かる．
 
+
+UARTでの受信は```HAL_UART_Transmit```で行う．
+```c
+/**
+  * @brief Receive an amount of data in blocking mode.
+  * @note   When UART parity is not enabled (PCE = 0), and Word Length is configured to 9 bits (M1-M0 = 01),
+  *         the received data is handled as a set of u16. In this case, Size must indicate the number
+  *         of u16 available through pData.
+  * @param huart   UART handle.
+  * @param pData   Pointer to data buffer (u8 or u16 data elements).
+  * @param Size    Amount of data elements (u8 or u16) to be received.
+  * @param Timeout Timeout duration.
+  * @retval HAL status
+  */
+HAL_StatusTypeDef HAL_UART_Receive(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size, uint32_t Timeout)
+```
+
 UART通信の例を示す．
 今回の場合，次のようなコードで，配列bufの長さ分の文字列を受け取ることができる．
 4つ目の引数は待ち時間で，何も入力されなくても0xFFFFミリ秒は受信を続ける．
+
+
 
 ```c
 HAL_UART_Receive( &huart2 , buf , sizeof(buf) , 0xFFFF );
 ```
 
-送信の場合は次のように記述することで可能である．
+UARTでの送信は```HAL_UART_Transmit```で行う．
+```c
+/**
+  * @brief Send an amount of data in blocking mode.
+  * @note   When UART parity is not enabled (PCE = 0), and Word Length is configured to 9 bits (M1-M0 = 01),
+  *         the sent data is handled as a set of u16. In this case, Size must indicate the number
+  *         of u16 provided through pData.
+  * @param huart   UART handle.
+  * @param pData   Pointer to data buffer (u8 or u16 data elements).
+  * @param Size    Amount of data elements (u8 or u16) to be sent.
+  * @param Timeout Timeout duration.
+  * @retval HAL status
+  */
+HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size, uint32_t Timeout)
+```
+
+今回の場合，送信の場合は次のように記述することで可能である．
 ```c
 HAL_UART_Transmit( &huart2 , buf , sizeof(buf) , 0xFFFF );
 ```

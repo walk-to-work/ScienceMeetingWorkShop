@@ -7,9 +7,9 @@
 - [演習1 Lチカ](./lec01)
 - [演習2 Lチカ with スイッチ](./lec02)
 - [演習3 UART](./lec03)
-- [演習3 ADC](./lec04)
-- [演習4 外部割り込み](./lec05)
-- [演習5 Direct Memory Access](./lec06)
+- [演習4 ADC](./lec04)
+- [演習5 外部割り込み](./lec05)
+- [演習6 Direct Memory Access](./lec06)
 
 <h2><center>&copy; Copyright (c) 2020 STMicroelectronics.
 All rights reserved.</center></h2>
