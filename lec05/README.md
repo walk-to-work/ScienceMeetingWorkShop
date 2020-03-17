@@ -1,97 +1,131 @@
-# 演習5 Direct Memory Access : DMA
+# 演習5 外部割り込み
 
-この演習ではDirect Memory Access : DMAについて取り扱う．
+前回の演習までのwhile文中に処理を書き，一定周期で特定処理を行うというプログラムは簡単なものであれば問題なく動くが，処理内容が重くなるとCPUリソースを無駄に浪費してしまい上手くいかないことも増える．
 
-DMAは簡潔に言えばCPUを用いない送受信の手法であり，UARTでの受信を例に上げると，通常の受信では
+そういった問題を解決するキーワードとなるのが，今回の割り込みと[演習6](../lec05)で紹介するDMAである．
 
-1. CPUがペリフェラルからReadし，レジスタに格納
-2. レジスタに取得した値をCPUがメモリに格納
-
-という順で処理されるが，DMAを用いた場合，
-
-0. (DMAの設定)
-1. ペリフェラルから入力を確認したDMACが，メモリへそのまま格納
-
-とCPUを介さずに処理することができる．これにより，CPUは送受信にリソースを割くことなく演算に集中できるという恩恵が得られる．
-データが垂れ流されているのを受信し，編集して送信といった処理であれば必須の処理とも言える．
-
-今回はそんなDMAを用いて，PCからの入力を受信し，半分埋まるごとにPCに送信という処理を作成する．
+[演習2](../lec02)を思い出して欲しい．そこではwhile文の中でスイッチが押されているかを検知し処理を行っていた．
+今回はGPIOに入力が来たとき検知するというEXTI割り込みという機能を用いてその処理をスマートに書く．
 
 ## CubeMXでの設定
 
-1. 左部[Connectivity]>[USART2]の[DMA Settings]をクリック
-2. 下部の[Add]をクリックし，[USART2_RX]を選択
-3. 下部の[Mode]で[Circular]を選択
+1. P12を右クリックし[GPIO_EXTI12]に設定
+2. P12を左クリックし[Enter User Label]で任意のラベルを入力．（今回はSW1とした）
+3. 次に[System Core] > [NVIC]を開き，[EXTI line15:10] interrupts]にチェックマークを入れる
+![exti_on](./img/EXTI_ON.png)
+1. [System Core] > [GPIO]で[PA12]を選択し，[GPIO Mode]を[External Interrupt Mode with Rising/Falling edge trigger detection]を選択
+   
+   これは立ち上がり，立下りの両方を検知するという意味である．
 
-![dma](img/dma_setting.png)
+最終的なピン配置は次の通りである．
+
+![ピン配置](./img/pin_assign.png)
 
 ## SW4STM32でのコーディング
 
-まず初めに確認して貰いたい点が，```main```関数内の```/* Initialize all configured peripherals */```だ．
-
-このコードは自動生成されるコードだが，DMAを初期化する関数である```MX_DMA_Init();```が，UARTを初期化する関数```MX_USART2_UART_Init();```より前に実行されるようになっているかを確認して貰いたい．
-DMAの初期化はそれを用いるペリフェラルの初期化より前に実行されるのが規定であるが，ときおり逆になっていることがある．バグ報告はしたが，改善されるまでは手で直すしかない．
-
-DMAを用いたUARTの受信関数```HAL_UART_Receive_DMA```について紹介する．この関数は今回の場合，次のようにすることでDMAを用いた受信を実行することができる．
+まずは，初期化コードの確認．```MX_GPIO_Init```内でSW1が次のように設定されている．
 
 ```c
-uint8_t buf[BUF_SIZE];
-HAL_UART_Receive_DMA( &huart2 , (uint8_t *)buf , sizeof(buf));
+/*Configure GPIO pin : SW1_Pin */
+	GPIO_InitStruct.Pin = SW1_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	HAL_GPIO_Init(SW1_GPIO_Port, &GPIO_InitStruct);
 ```
 
-Modeを[Circular]にしている場合，受信サイズを受け取った際にまた先頭からデータを入力していくため，エラー等が起きない限りは受信し続ける．
-
-DMAを用いた処理には多くの場合割り込み設定が可能であり，```HAL_UART_Receive_DMA```も割り込み設定が可能である．この関数の定義を見てみると，
-
+また，同関数内で次のように割り込みに関して設定されていることが分かる．
 ```c
-	  /* Set the UART DMA transfer complete callback */
-      huart->hdmarx->XferCpltCallback = UART_DMAReceiveCplt;
-
-      /* Set the UART DMA Half transfer complete callback */
-      huart->hdmarx->XferHalfCpltCallback = UART_DMARxHalfCplt;
-
-      /* Set the DMA error callback */
-      huart->hdmarx->XferErrorCallback = UART_DMAError;
-
-      /* Set the DMA abort callback */
-      huart->hdmarx->XferAbortCallback = NULL;
+/* EXTI interrupt init*/
+    HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 ```
 
-このように割り込み関数を割り当てているのが確認できる．更に完了割り込みである```UART_DMAReceiveCplt```の定義を見てみるとコールバック関数を呼び出していることが確認できる．
+実際にエッジを検出した際は，```src/stm32f3xx_it.c```内の```EXTI15_10_IRQHandler```が呼び出される．
 
 ```c
-/*Call legacy weak Rx complete callback*/
-	HAL_UART_RxCpltCallback(huart);
-```
-
-この```HAL_UART_RxCpltCallback(huart);```であるが，記載通り定義は```__weak```修飾子が用いられており，
-
-```c
-/**
-  * @brief  Rx Transfer completed callback.
-  * @param  huart UART handle.
-  * @retval None
-  */
-__weak void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+void EXTI15_10_IRQHandler(void)
 {
-	/* Prevent unused argument(s) compilation warning */
-  	UNUSED(huart);
+	/* USER CODE BEGIN EXTI15_10_IRQn 0 */
 
-  	/* NOTE : This function should not be modified, when the callback is needed,
-            the HAL_UART_RxCpltCallback can be implemented in the user file.
-   	*/
+	/* USER CODE END EXTI15_10_IRQn 0 */
+	HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_12);
+	/* USER CODE BEGIN EXTI15_10_IRQn 1 */
+
+	/* USER CODE END EXTI15_10_IRQn 1 */
 }
 ```
 
-```__weak```を消して再定義することで上書きすることができる．つまり，この```HAL_UART_RxCpltCallback```を用いてDMA完了時に割り込みを発生させ特定の処理ができる．
+この関数内に割り込み時の処理を書いても良いが，```HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_12);```で何が行わているかをまず確認する．
 
-この割り込みを用いて，メモリが埋まるごとに```HAL_UART_Transmit```でPCのターミナルに出力する処理を書き，実行してください．
+```c
+/**
+ * @brief  Handle EXTI interrupt request.
+ * @param  GPIO_Pin Specifies the port pin connected to corresponding EXTI line.
+ * @retval None
+ */
+void HAL_GPIO_EXTI_IRQHandler(uint16_t GPIO_Pin)
+{
+	/* EXTI line interrupt detected */
+	if(__HAL_GPIO_EXTI_GET_IT(GPIO_Pin) != 0x00u)
+	{
+		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_Pin);
+		HAL_GPIO_EXTI_Callback(GPIO_Pin);
+	}
+}
+```
 
-# 課題5
+この関数では，入力の```GPIO_Pin```で実際に割り込みが発生したかを```if(__HAL_GPIO_EXTI_GET_IT(GPIO_Pin) != 0x00u)```で調べ，
+発生した場合，```__HAL_GPIO_EXTI_CLEAR_IT(GPIO_Pin);```で割り込み検知レジスタを初期化後，コールバック関数```HAL_GPIO_EXTI_Callback(GPIO_Pin);```を呼び出している．
 
-バッファが**半分**埋まるごとにPCに出力する処理を書き，実行してください．
+```HAL_GPIO_EXTI_Callback```を見てみる．
 
-ヒント：```UART_DMARxHalfCplt```の定義を追っていけば半分埋まった際のコールバック関数も分かる
+```c
+/**
+ * @brief  EXTI line detection callback.
+ * @param  GPIO_Pin Specifies the port pin connected to corresponding EXTI line.
+ * @retval None
+ */
+__weak void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	/* Prevent unused argument(s) compilation warning */
+	UNUSED(GPIO_Pin);
 
+	/* NOTE: This function should not be modified, when the callback is needed,
+           the HAL_GPIO_EXTI_Callback could be implemented in the user file
+	 */
+}
+```
+
+この処理では特に何も処理を行っていないことが分かる．
+この関数も[演習1](../lec01)で紹介した，```HAL_Delay```同様，装飾子```__weak```がついていることが分かる．
+
+この```__weak```がついている関数はついてない関数よりも優先度が低く，コンパイル時に```__weak```がついている関数とついていない関数が存在する場合，<u>ついていない関数が優先される</u>．つまり，
+
+```c
+__weak void hoge(){
+    printf("fuga!")
+}
+
+void hoge(){
+    printf("piyo!")
+}
+```
+
+をコンパイルした場合，関数```hoge```は```piyo!```と表示する関数となる．
+
+今回はこの性質を用い，```main.c```内に```void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)```を宣言し，そこに割り込みの処理を書く．
+
+演習4の解説は以上です．
+
+GPIO割り込みを用いて演習2同様にSW1押しているとき間LD3が点灯し，離すと消灯するプログラムを作成してください．
+
+また，PA8も同様に[GPIO_EXTI]とし，EXTIラインを有効化し，ラベルをSW2とし，
+SW1とSW2ともに[External Interrupt Mode with Falling edge trigger detection]（立下り検知）とし，
+
+- SW1が押されたとき+1
+- SW2が押されたとき-1
+- どちらが押されてもカウンターの値をターミナル表示
+
+というプログラムを作成してください．
 
 [実装例はこちら](./main.c)

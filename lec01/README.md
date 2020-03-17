@@ -192,6 +192,8 @@ HAL_Delay(1000);
 
 演習1での解説は以上である．
 
-Lチカの処理を実装してください．
+GPIO_Write_Pinを用いてLチカの処理を実装してください．
 
 [実装例はこちら](./main.c)
+
+余裕のある人は，GPIO_Outputへの出力を反転させる関数```HAL_GPIO_Toggle_Pin(GPIO_Port , GPIO_Pin)```を用いたLチカも実装してみてください．

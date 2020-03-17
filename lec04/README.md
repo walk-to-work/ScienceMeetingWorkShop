@@ -1,131 +1,98 @@
-# 演習4 外部割り込み
+# 演習4 ADCとUART
 
-前回の演習までのwhile文中に処理を書き，一定周期で特定処理を行うというプログラムは簡単なものであれば問題なく動くが，処理内容が重くなるとCPUリソースを無駄に浪費してしまい上手くいかないことも増える．
-
-そういった問題を解決するキーワードとなるのが，今回の割り込みと[演習5](../lec05)で紹介するDMAである．
-
-[演習2](../lec02)を思い出して欲しい．そこではwhile文の中でスイッチが押されているかを検知し処理を行っていた．
-今回はGPIOに入力が来たとき検知するというEXTI割り込みという機能を用いてその処理をスマートに書く．
+今回はピンからの入力電圧を連続値(アナログ)で受け取るためのペリフェラル，Analog Digital Converter:ADCと，調歩通信方式であるUARTを用いて，
+Nucleoで取得したセンサの値をPCのターミナル上で表示する．
 
 ## CubeMXでの設定
 
-1. P12を右クリックし[GPIO_EXTI12]に設定
-2. P12を左クリックし[Enter User Label]で任意のラベルを入力．（今回はSW1とした）
-3. 次に[System Core] > [NVIC]を開き，[EXTI line15:10] interrupts]にチェックマークを入れる
-![exti_on](./img/EXTI_ON.png)
-1. [System Core] > [GPIO]で[PA12]を選択し，[GPIO Mode]を[External Interrupt Mode with Rising/Falling edge trigger detection]を選択
-   
-   これは立ち上がり，立下りの両方を検知するという意味である．
+### ADCの設定
 
-最終的なピン配置は次の通りである．
+今回仕様する基板ではA0ピン，つまりPA0ピンに温度センサ，A4ピン(PA5)に照度センサが接続されている．
+左のタブから
+- [Analog]>[ADC1]を選択し，[IN1]を[IN1 Single-ended]
+- [Analog]>[ADC2]を選択し，[IN2]を[IN2 Single-ended]
 
-![ピン配置](./img/pin_assign.png)
+と選択することで有効化することができる．
+
+![ADCピン](./img/adc_pin_assign.png)
+
+また，設定で[Continuous Conversion]を[Enable]にすること(忘れると一度値を取ったまま，次ADC_Startが実行されるまで動かない)
+
+![important](./img/important.png)
+### UARTの設定
+
+NucleoについているUSB TypeBポートとSTM32のUARTペリフェラルは接続されており，
+
+1. PA2を[USART2_TX]に設定
+2. PA15を[USART2_RX]に設定
+3. 左のタブから[Connectivity]>[Mode]で[Asynchronous]を選択
+
+![UART有効化](./img/usart_enable.png)
+
+4. 下部の[Parameter Setting]より[Baud Rate]を[115200]に設定（今回はしてもしなくてもよい）
+
+![ボーレート](./img/baud_rate.png)
+
+することでUSB TypeBケーブル経由でPCとUSART通信を行うことができる．
+
+
+
+最終的なピン割り当てはこの通り
+
+![ピン割り当て](./img/pin_assign.png)
+
+確認できたら[GENERATE CODE]する．
 
 ## SW4STM32でのコーディング
 
-まずは，初期化コードの確認．```MX_GPIO_Init```内でSW1が次のように設定されている．
+
+### ADCの値取得
+
+ADCの値の取得はGPIOのようにワンラインではできない．
+```HAL_ADCEx_Calibration_Start```でキャリブレーション，```HAL_ADC_Start```でADCのスタートを行い，
+```HAL_ADC_PollForConversion```で変換終了を確認してから```HAL_ADC_GetValue```で値を受け取らなければ，適切な値を受け取れない．
+
+次のコードはHALハンドルが```hadc1```のADCチャンネルでの値取得の例である．
 
 ```c
-/*Configure GPIO pin : SW1_Pin */
-	GPIO_InitStruct.Pin = SW1_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	HAL_GPIO_Init(SW1_GPIO_Port, &GPIO_InitStruct);
-```
-
-また，同関数内で次のように割り込みに関して設定されていることが分かる．
-```c
-/* EXTI interrupt init*/
-    HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
-```
-
-実際にエッジを検出した際は，```src/stm32f3xx_it.c```内の```EXTI15_10_IRQHandler```が呼び出される．
-
-```c
-void EXTI15_10_IRQHandler(void)
-{
-	/* USER CODE BEGIN EXTI15_10_IRQn 0 */
-
-	/* USER CODE END EXTI15_10_IRQn 0 */
-	HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_12);
-	/* USER CODE BEGIN EXTI15_10_IRQn 1 */
-
-	/* USER CODE END EXTI15_10_IRQn 1 */
+HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
+HAL_ADC_Start(&hadc1);
+int adc1_val = 0;
+while(1){
+    if( HAL_ADC_PollForConversion(&hadc1 , 10 ) )
+	    adc1_val = HAL_ADC_GetValue(&hadc1);
 }
+HAL_ADC_Stop(&hadc1);
 ```
 
-この関数内に割り込み時の処理を書いても良いが，```HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_12);```で何が行わているかをまず確認する．
+### UARTでの送信
+
+UARTでの送信は```HAL_UART_Transmit```で行う．
 
 ```c
 /**
- * @brief  Handle EXTI interrupt request.
- * @param  GPIO_Pin Specifies the port pin connected to corresponding EXTI line.
- * @retval None
- */
-void HAL_GPIO_EXTI_IRQHandler(uint16_t GPIO_Pin)
-{
-	/* EXTI line interrupt detected */
-	if(__HAL_GPIO_EXTI_GET_IT(GPIO_Pin) != 0x00u)
-	{
-		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_Pin);
-		HAL_GPIO_EXTI_Callback(GPIO_Pin);
-	}
-}
+  * @brief Send an amount of data in blocking mode.
+  * @note   When UART parity is not enabled (PCE = 0), and Word Length is configured to 9 bits (M1-M0 = 01),
+  *         the sent data is handled as a set of u16. In this case, Size must indicate the number
+  *         of u16 provided through pData.
+  * @param huart   UART handle.
+  * @param pData   Pointer to data buffer (u8 or u16 data elements).
+  * @param Size    Amount of data elements (u8 or u16) to be sent.
+  * @param Timeout Timeout duration.
+  * @retval HAL status
+  */
+HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size, uint32_t Timeout)
 ```
 
-この関数では，入力の```GPIO_Pin```で実際に割り込みが発生したかを```if(__HAL_GPIO_EXTI_GET_IT(GPIO_Pin) != 0x00u)```で調べ，
-発生した場合，```__HAL_GPIO_EXTI_CLEAR_IT(GPIO_Pin);```で割り込み検知レジスタを初期化後，コールバック関数```HAL_GPIO_EXTI_Callback(GPIO_Pin);```を呼び出している．
-
-```HAL_GPIO_EXTI_Callback```を見てみる．
+今回の場合，次のように書くことで文字列bufを送信できる．
 
 ```c
-/**
- * @brief  EXTI line detection callback.
- * @param  GPIO_Pin Specifies the port pin connected to corresponding EXTI line.
- * @retval None
- */
-__weak void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-	/* Prevent unused argument(s) compilation warning */
-	UNUSED(GPIO_Pin);
-
-	/* NOTE: This function should not be modified, when the callback is needed,
-           the HAL_GPIO_EXTI_Callback could be implemented in the user file
-	 */
-}
+// huart2に割り当てられたハンドルでアドレスbufからsizeof(buf)バイトのデータを送信する．送信完了待ち時間は0xFFFFミリ秒
+HAL_UART_Transmit(&huart2, buf , sizeof(buf) , 0xFFFF );
 ```
 
-この処理では特に何も処理を行っていないことが分かる．
-この関数も[演習1](../lec01)で紹介した，```HAL_Delay```同様，装飾子```__weak```がついていることが分かる．
+演習3の解説は以上です．
 
-この```__weak```がついている関数はついてない関数よりも優先度が低く，コンパイル時に```__weak```がついている関数とついていない関数が存在する場合，<u>ついていない関数が優先される</u>．つまり，
-
-```c
-__weak void hoge(){
-    printf("fuga!")
-}
-
-void hoge(){
-    printf("piyo!")
-}
-```
-
-をコンパイルした場合，関数```hoge```は```piyo!```と表示する関数となる．
-
-今回はこの性質を用い，```main.c```内に```void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)```を宣言し，そこに割り込みの処理を書く．
-
-演習4の解説は以上です．
-
-GPIO割り込みを用いて演習2同様にSW1押しているとき間LD3が点灯し，離すと消灯するプログラムを作成してください．
-
-また，PA8も同様に[GPIO_EXTI]とし，EXTIラインを有効化し，ラベルをSW2とし，
-SW1とSW2ともに[External Interrupt Mode with Falling edge trigger detection]（立下り検知）とし，
-
-- SW1が押されたとき+1
-- SW2が押されたとき-1
-- どちらが押されてもカウンターの値をターミナル表示
-
-というプログラムを作成してください．
+温度センサと照度センサの値を受け取り，PCのコンソールに表示する処理を書いてください．
 
 [実装例はこちら](./main.c)
