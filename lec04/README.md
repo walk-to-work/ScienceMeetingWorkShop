@@ -39,7 +39,7 @@ HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
 HAL_ADC_Start(&hadc1);
 int adc1_val = 0;
 while(1){
-    if( HAL_ADC_PollForConversion(&hadc1 , 10 ) )
+    if( HAL_ADC_PollForConversion(&hadc1 , 10 ) == HAL_OK )
 	    adc1_val = HAL_ADC_GetValue(&hadc1);
 }
 HAL_ADC_Stop(&hadc1);
